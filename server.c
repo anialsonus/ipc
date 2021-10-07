@@ -53,7 +53,7 @@ main (int argc, char **argv)
         if (res < 0)
             handle_error("Failed to start poll() on the socket");
         
-        if(pfds[0].revents && POLLIN)
+        if(pfds[0].revents & POLLIN)
         {
             size = recvfrom(pfds[0].fd, &readbuf, sizeof(readbuf), 0, NULL, NULL);
             printf("Received %lu bytes from the socket", size);
