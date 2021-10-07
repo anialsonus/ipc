@@ -35,7 +35,7 @@ main (int argc, char **argv)
     if ((access(SOCKET_PATH, R_OK) == 0) && unlink(SOCKET_PATH) < 0)
         handle_error("Failed to unlink the socket");
 
-    /* Assign address to the socket file descriptor */
+    /* Assign address to the socket descriptor */
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_LOCAL;
     strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
