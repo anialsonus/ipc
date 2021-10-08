@@ -33,7 +33,9 @@ main (int argc, char **argv)
         handle_error("Failed to set receive buffer length");
 
     /* Delete an existing socket file if any */
-    if ((access(SOCKET_PATH, R_OK) == 0) && unlink(SOCKET_PATH) < 0)
+    if (access(SOCKET_PATH, R_OK) < 0)
+        handle_error("Failed to access the socket");
+    if (unlink(SOCKET_PATH) < 0)
         handle_error("Failed to unlink the socket");
 
     /* Assign address to the socket descriptor */
