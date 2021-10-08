@@ -6,68 +6,64 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "ipc.h"
+#include "../ipc.h"
 
-#define TRANSMISSIONS 1000000
-
-#define SND_BUFFER_SIZE 512 * 1024 - 1
+#define RCV_BUFFER_SIZE 512 * 1024 - 1
 
 int
 main (int argc, char **argv)
 {
     int sockbuf;
-    char writebuf[PACKET_SIZE];
+    char readbuf[PACKET_SIZE];
     int res;
     int sockfd;
-    int trans;
     ssize_t size;
     struct pollfd pfds[1];
     struct sockaddr_un address;
-
-    if (access(SOCKET_PATH, R_OK) < 0)
-        handle_error("Failed to access socket file");
 
     /* Init socket file descriptor */
     sockfd = socket(AF_LOCAL, SOCK_DGRAM, 0);
     if (sockfd < 0)
         handle_error("Failed to create a Unix socket");
 
-    /* Set socket send buffer size */
-    sockbuf = SND_BUFFER_SIZE;
-    res = setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sockbuf, sizeof(sockbuf));
+    /* Set socket receive buffer size */
+    sockbuf = RCV_BUFFER_SIZE;
+    res = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &sockbuf, sizeof(sockbuf));
     if (res < 0)
-        handle_error("Failed to set send buffer length");
+        handle_error("Failed to set receive buffer length");
 
-    /* Init the address */
+    /* Delete an existing socket file if any */
+    if (access(SOCKET_PATH, R_OK) < 0)
+        handle_error("Failed to access the socket");
+    if (unlink(SOCKET_PATH) < 0)
+        handle_error("Failed to unlink the socket");
+
+    /* Assign address to the socket descriptor */
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_LOCAL;
     strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
     address.sun_len = sizeof(SOCKET_PATH) - 1;
+    if (bind(sockfd, (const struct sockaddr *) &address, sizeof(address)) < 0)
+        handle_error("Failed to assign address to the socket");
 
-    /* Prepare batch of data to send (filled with zeroes at the moment) */
-    memset(&writebuf, 0, sizeof(writebuf));
-
-    /* Send packets to the socket when there is enough space in the buffer */
+    /* Wait for incoming data from the socket */
     pfds[0].fd = sockfd;
-    pfds[0].events = POLLOUT;
+    pfds[0].events = POLLIN;
 
-
-    trans = TRANSMISSIONS;
-    while(trans > 0)
+    while(1)
     {
         res = poll(pfds, 1, -1);
         if (res < 0)
             handle_error("Failed to start poll() on the socket");
         
-        if(pfds[0].revents & POLLOUT)
+        if(pfds[0].revents & POLLIN)
         {
-            size = sendto(pfds[0].fd, &writebuf, sizeof(writebuf), 0, (const struct sockaddr *) &address, sizeof(address));
+            size = recvfrom(pfds[0].fd, &readbuf, sizeof(readbuf), 0, NULL, NULL);
             if (size < 0)
-                perror("Failed to send data to the socket");
+                perror("Failed to receive from the socket");
 #ifdef DEBUG
-            printf("Sent %lu bytes to the socket\n", size);
+            printf("Received %lu bytes from the socket\n", size);
 #endif
-            trans--;
         }
         else
         {
@@ -78,6 +74,4 @@ main (int argc, char **argv)
             exit(EXIT_FAILURE);
         }
     }
-
-    exit(EXIT_SUCCESS);
 }
