@@ -40,7 +40,6 @@ main (int argc, char **argv)
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_LOCAL;
     strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
-    address.sun_len = sizeof(SOCKET_PATH) - 1;
     if (bind(sockfd, (const struct sockaddr *) &address, sizeof(address)) < 0)
         handle_error("Failed to assign address to the socket");
 

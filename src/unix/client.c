@@ -42,7 +42,6 @@ main (int argc, char **argv)
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_LOCAL;
     strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
-    address.sun_len = sizeof(SOCKET_PATH) - 1;
 
     /* Prepare batch of data to send (filled with zeroes at the moment) */
     memset(&writebuf, 0, sizeof(writebuf));
