@@ -8,7 +8,7 @@
 
 #include "ipc.h"
 
-#define TRANSMISSIONS 100
+#define TRANSMISSIONS 1000000
 
 #define SND_BUFFER_SIZE 512 * 1024 - 1
 
@@ -63,8 +63,10 @@ main (int argc, char **argv)
         {
             size = sendto(pfds[0].fd, &writebuf, sizeof(writebuf), 0, (const struct sockaddr *) &address, sizeof(address));
             if (size < 0)
-                handle_error("Failed to send data to the socket");
+                perror("Failed to send data to the socket");
+#ifdef DEBUG
             printf("Sent %lu bytes to the socket\n", size);
+#endif
             trans--;
         }
         else

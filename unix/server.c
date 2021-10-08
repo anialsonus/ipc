@@ -59,7 +59,11 @@ main (int argc, char **argv)
         if(pfds[0].revents & POLLIN)
         {
             size = recvfrom(pfds[0].fd, &readbuf, sizeof(readbuf), 0, NULL, NULL);
+            if (size < 0)
+                perror("Failed to receive from the socket");
+#ifdef DEBUG
             printf("Received %lu bytes from the socket\n", size);
+#endif
         }
         else
         {
