@@ -1,4 +1,5 @@
 #include <poll.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +11,15 @@
 
 #define RCV_BUFFER_SIZE 512 * 1024 - 1
 
+/* Non-atomic, but it is ok for our test case */
+static volatile uint64_t totalsize;
+
+void termination_handler(int signum)
+{
+    printf("Total bytes: %llu\n", totalsize);
+    exit(EXIT_SUCCESS);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -20,6 +30,9 @@ main (int argc, char **argv)
     ssize_t size;
     struct pollfd pfds[1];
     struct sockaddr_un address;
+    struct sigaction handler;
+
+    totalsize = 0;
 
     /* Init socket file descriptor */
     sockfd = socket(AF_LOCAL, SOCK_DGRAM, 0);
@@ -43,6 +56,13 @@ main (int argc, char **argv)
     if (bind(sockfd, (const struct sockaddr *) &address, sizeof(address)) < 0)
         handle_error("Failed to assign address to the socket");
 
+    /* Set signal handler */
+    handler.sa_handler = termination_handler;
+    sigemptyset(&handler.sa_mask);
+    handler.sa_flags = 0;
+    if (sigaction(SIGINT, &handler, NULL) < 0)
+        handle_error("Failed to set a signal handler");
+
     /* Wait for incoming data from the socket */
     pfds[0].fd = sockfd;
     pfds[0].events = POLLIN;
@@ -58,12 +78,15 @@ main (int argc, char **argv)
             size = recvfrom(pfds[0].fd, &readbuf, sizeof(readbuf), 0, NULL, NULL);
             if (size < 0)
                 perror("Failed to receive from the socket");
+            else
+                totalsize += size;
 #ifdef DEBUG
             printf("Received %lu bytes from the socket\n", size);
 #endif
         }
         else
         {
+            printf("Total bytes: %llu\n", totalsize);
             if (close(pfds[0].fd) < 0)
                 handle_error("Failed to close socket");
             if ((access(SOCKET_PATH, R_OK) == 0) && unlink(SOCKET_PATH) < 0)

@@ -1,4 +1,5 @@
 #include <poll.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +13,15 @@
 
 #define SND_BUFFER_SIZE 512 * 1024 - 1
 
+/* Non-atomic, but it is ok for our test case */
+static volatile uint64_t totalsize;
+
+void termination_handler(int signum)
+{
+    printf("Total bytes: %llu\n", totalsize);
+    exit(EXIT_SUCCESS);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -23,6 +33,9 @@ main (int argc, char **argv)
     ssize_t size;
     struct pollfd pfds[1];
     struct sockaddr_un address;
+    struct sigaction handler;
+
+    totalsize = 0;
 
     if (access(SOCKET_PATH, R_OK) < 0)
         handle_error("Failed to access socket file");
@@ -46,6 +59,13 @@ main (int argc, char **argv)
     /* Prepare batch of data to send (filled with zeroes at the moment) */
     memset(&writebuf, 0, sizeof(writebuf));
 
+    /* Set signal handler */
+    handler.sa_handler = termination_handler;
+    sigemptyset(&handler.sa_mask);
+    handler.sa_flags = 0;
+    if (sigaction(SIGINT, &handler, NULL) < 0)
+        handle_error("Failed to set a signal handler");
+
     /* Send packets to the socket when there is enough space in the buffer */
     pfds[0].fd = sockfd;
     pfds[0].events = POLLOUT;
@@ -63,11 +83,18 @@ main (int argc, char **argv)
             size = sendto(pfds[0].fd, &writebuf, sizeof(writebuf), 0, (const struct sockaddr *) &address, sizeof(address));
             if (size < 0)
                 perror("Failed to send data to the socket");
+            else
+                totalsize += size;
 #ifdef DEBUG
             printf("Sent %lu bytes to the socket\n", size);
 #endif
             trans--;
         }
+        else if (pfds[0].revents & POLLHUP)
+        {
+            printf("Total bytes: %llu\n", totalsize);
+            exit(EXIT_FAILURE);
+        }  
         else
         {
             if (close(pfds[0].fd) < 0)
@@ -78,5 +105,6 @@ main (int argc, char **argv)
         }
     }
 
+    printf("Total bytes: %llu\n", totalsize);
     exit(EXIT_SUCCESS);
 }
