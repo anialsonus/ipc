@@ -15,7 +15,7 @@
 
 #define RCV_BUFFER_SIZE 512 * 1024 - 1
 
-static volatile uint64_t totalsize;
+static volatile uint64_t totalsize = 0;
 
 /* Signum of the pending signal */
 static volatile sig_atomic_t signal_pending = 0;
@@ -47,8 +47,6 @@ main (int argc, char **argv)
     struct pollfd pfds[1];
     struct sockaddr_un address;
     struct sigaction handler;
-
-    totalsize = 0;
 
     /* Init socket file descriptor */
     sockfd = socket(AF_LOCAL, SOCK_DGRAM, 0);
