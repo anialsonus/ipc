@@ -15,7 +15,7 @@
 
 #define TRANSMISSIONS 1000000
 
-#define SND_BUFFER_SIZE 512 * 1024 - 1
+#define SND_BUFFER_SIZE 4 * PACKET_SIZE
 
 static volatile uint64_t totalsize = 0;
 

@@ -13,7 +13,7 @@
 
 #include "../ipc.h"
 
-#define RCV_BUFFER_SIZE 512 * 1024 - 1
+#define RCV_BUFFER_SIZE 4 * PACKET_SIZE
 
 static volatile uint64_t totalsize = 0;
 
