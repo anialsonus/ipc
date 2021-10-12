@@ -1,11 +1,14 @@
-#include <poll.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
 #include <signal.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include "../ipc.h"
@@ -14,29 +17,39 @@
 
 #define SND_BUFFER_SIZE 512 * 1024 - 1
 
-/* Non-atomic, but it is ok for our test case */
 static volatile uint64_t totalsize;
+
+/* Signum of the pending signal */
+static volatile sig_atomic_t signal_pending = 0;
+/* Do we have a pending signal? */
+static volatile sig_atomic_t defer_signal = 0;
 
 void termination_handler(int signum)
 {
-    printf("Total bytes: %llu\n", totalsize);
-    exit(EXIT_SUCCESS);
+    if (defer_signal)
+    {
+        signal_pending = signum;
+    }
+    else
+    {
+        printf("Total bytes: %" PRIu64 "\n", totalsize);
+        exit(EXIT_SUCCESS);
+    }
 }
 
 int
 main (int argc, char **argv)
 {
     int sockbuf;
+    int flags;
     char writebuf[PACKET_SIZE];
     int res;
     int sockfd;
-    int trans;
     ssize_t size;
     struct pollfd pfds[1];
     struct sockaddr_un address;
     struct sigaction handler;
 
-    totalsize = 0;
 
     if (access(SOCKET_PATH, R_OK) < 0)
         handle_error("Failed to access socket file");
@@ -45,6 +58,13 @@ main (int argc, char **argv)
     sockfd = socket(AF_LOCAL, SOCK_DGRAM, 0);
     if (sockfd < 0)
         handle_error("Failed to create a Unix socket");
+
+    /* Make socket non-blocking */
+    flags = fcntl(sockfd, F_GETFL, 0);
+    if(flags < 0)
+        handle_error("Failed to get socket descriptor flags");
+    if(fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
+        handle_error("Failed to add non-blocking flag to the socket");
 
     /* Set socket send buffer size */
     sockbuf = SND_BUFFER_SIZE;
@@ -71,9 +91,8 @@ main (int argc, char **argv)
     pfds[0].fd = sockfd;
     pfds[0].events = POLLOUT;
 
-
-    trans = TRANSMISSIONS;
-    while(trans > 0)
+    totalsize = 0;
+    while((uint64_t) TRANSMISSIONS * PACKET_SIZE > totalsize)
     {
         res = poll(pfds, 1, -1);
         if (res < 0)
@@ -81,19 +100,31 @@ main (int argc, char **argv)
         
         if(pfds[0].revents & POLLOUT)
         {
-            size = sendto(pfds[0].fd, &writebuf, sizeof(writebuf), 0, (const struct sockaddr *) &address, sizeof(address));
-            if (size < 0)
-                perror("Failed to send data to the socket");
-            else
+            while ((size = sendto(pfds[0].fd, &writebuf, sizeof(writebuf), 0, (const struct sockaddr *) &address, sizeof(address))) >= 0)
+            {
+                if(size != sizeof(writebuf))
+                    printf("Send: %" PRIu64 ", expected: %" PRIu64, size, sizeof(writebuf));
+
+                /* Block SIGINT while update critical section */
+                defer_signal++;
+
+                /* Update counter */
                 totalsize += size;
+
+                /* Unblock critical section and reraise SIGINT */
+                defer_signal--;
+                if (!defer_signal && signal_pending != 0)
+                    raise(signal_pending);
+            }
+            if ((errno != EAGAIN) && (errno != ENOBUFS))
+                perror("Failed to send data to the socket");
 #ifdef DEBUG
             printf("Sent %lu bytes to the socket\n", size);
 #endif
-            trans--;
         }
         else if (pfds[0].revents & POLLHUP)
         {
-            printf("Total bytes: %llu\n", totalsize);
+            printf("Total bytes: %" PRIu64 "\n", totalsize);
             exit(EXIT_FAILURE);
         }  
         else
@@ -106,6 +137,6 @@ main (int argc, char **argv)
         }
     }
 
-    printf("Total bytes: %llu\n", totalsize);
+    printf("Total bytes: %" PRIu64 "\n", totalsize);
     exit(EXIT_SUCCESS);
 }
