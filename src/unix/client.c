@@ -17,7 +17,7 @@
 
 #define SND_BUFFER_SIZE 512 * 1024 - 1
 
-static volatile uint64_t totalsize;
+static volatile uint64_t totalsize = 0;
 
 /* Signum of the pending signal */
 static volatile sig_atomic_t signal_pending = 0;
@@ -91,7 +91,6 @@ main (int argc, char **argv)
     pfds[0].fd = sockfd;
     pfds[0].events = POLLOUT;
 
-    totalsize = 0;
     while((uint64_t) TRANSMISSIONS * PACKET_SIZE > totalsize)
     {
         res = poll(pfds, 1, -1);
@@ -115,6 +114,9 @@ main (int argc, char **argv)
                 defer_signal--;
                 if (!defer_signal && signal_pending != 0)
                     raise(signal_pending);
+
+                if ((uint64_t) TRANSMISSIONS * PACKET_SIZE <= totalsize)
+                    break;
             }
             if ((errno != EAGAIN) && (errno != ENOBUFS))
                 perror("Failed to send data to the socket");
