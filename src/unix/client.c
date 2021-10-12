@@ -49,6 +49,7 @@ main (int argc, char **argv)
     struct pollfd pfds[1];
     struct sockaddr_un address;
     struct sigaction handler;
+    volatile sig_atomic_t do_repeat;
 
 
     if (access(SOCKET_PATH, R_OK) < 0)
@@ -91,7 +92,8 @@ main (int argc, char **argv)
     pfds[0].fd = sockfd;
     pfds[0].events = POLLOUT;
 
-    while((uint64_t) TRANSMISSIONS * PACKET_SIZE > totalsize)
+    do_repeat = 1;
+    while(do_repeat)
     {
         res = poll(pfds, 1, -1);
         if (res < 0)
@@ -116,7 +118,10 @@ main (int argc, char **argv)
                     raise(signal_pending);
 
                 if ((uint64_t) TRANSMISSIONS * PACKET_SIZE <= totalsize)
+                {
+                    do_repeat = 0;
                     break;
+                }
             }
             if ((errno != EAGAIN) && (errno != ENOBUFS))
                 perror("Failed to send data to the socket");
