@@ -1,7 +1,7 @@
 #ifndef IPC_H
 #define IPC_H
 
-#define PACKET_SIZE 8 * 1024
+#define PACKET_SIZE 63 * 1024
 #define SOCKET_PATH "/tmp/.unix.sock"
 #define SOCKET_ADDR "127.0.0.1"
 #define SOCKET_PORT 8888
